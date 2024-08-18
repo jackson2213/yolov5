@@ -23,7 +23,7 @@ With inference result got changed, the following optimization was applied:
 
 ## How to use
 
-### export model
+### export model to onnx
 ```bash
 # for detection model
 python export.py --rknpu --weight best.pt
@@ -34,6 +34,9 @@ python export.py --rknpu --weight yolov5s-seg.pt
 
 ### convert model to rknn
 ```bash
+wget https://github.com/airockchip/rknn-toolkit2/blob/v1.5.2/packages/rknn_toolkit2-1.5.2%2Bb642f30c-cp310-cp310-linux_x86_64.whl
+git clone https://github.com/airockchip/rknn-toolkit2.git -b v1.5.2
+pip3 install rknn-toolkit2/packages/rknn_toolkit2-1.5.2+b642f30c-cp38-cp38-linux_x86_64.whl 
 python convert/convert.py
 ```
 
