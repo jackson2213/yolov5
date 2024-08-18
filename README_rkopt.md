@@ -23,13 +23,25 @@ With inference result got changed, the following optimization was applied:
 
 ## How to use
 
-```
+### export model
+```bash
 # for detection model
-python export.py --rknpu --weight yolov5s.pt
+python export.py --rknpu --weight best.pt
 
 # for segmentation model
 python export.py --rknpu --weight yolov5s-seg.pt
 ```
+
+### convert model to rknn
+```bash
+python convert/convert.py
+```
+
+### test rknn mode1
+```bash
+python3 yolov5.py --model_path best.rknn --data 1.mp4
+```
+
 
 - 'yolov5s.pt'/ 'yolov5s-seg.pt' could be replaced with your model path
 - A file name "RK_anchors.txt" would be generated and it would be used for the post_process stage. 

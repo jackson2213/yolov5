@@ -1,0 +1,9 @@
+numpy==1.26.4
+opencv-python==4.10.0.84
+imageio==2.35.0
+requests==2.32.3
+imageio[ffmpeg]
+shapely==2.0.5
+pymodbus==3.6.8
+pyserial==3.5
+pymodbus==3.6.8
