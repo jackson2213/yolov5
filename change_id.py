@@ -36,10 +36,34 @@ def delete_unassociated_labels(label_folder, image_folder):
 # delete_unassociated_labels(label_folder, image_folder)
 
 
+def delete_images_without_labels(images_folder, labels_folder):
+    # 获取所有jpg文件的基础名称
+    images = set([f[:-4] for f in os.listdir(images_folder) if f.endswith('.jpg')])
+
+    # 获取所有txt文件的基础名称
+    labels = set([f[:-4] for f in os.listdir(labels_folder) if f.endswith('.txt')])
+
+    # 找出没有对应标签的图片
+    images_without_labels = images - labels
+
+    # 删除没有对应标签的图片
+    for image_name in images_without_labels:
+        file_path = os.path.join(images_folder, image_name + '.jpg')
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"Deleted: {file_path}")
 
 
-predict_folder = "D:\\AndroidProject\\rk3588_ultralytics_yolov8\\runs\\detect\\predict\\labels"
-label_folder = 'D:\\AndroidProject\\det_garbage_yolo\\test\\labels'
+# 使用函数
+images_folder = 'D:\\AndroidProject\\det_garbage_yolo\\xiaoqu\\images'
+labels_folder = 'D:\\AndroidProject\\det_garbage_yolo\\xiaoqu\\labels'
+
+delete_images_without_labels(images_folder, labels_folder)
+
+
+
+predict_folder = "C:\\Users\\97409\\Desktop\\MP4\\labels"
+label_folder = 'C:\\Users\\97409\\Desktop\\MP4\\frames'
 
 def merge_person_obj(label_folder,predict_folder):
     for file_name in os.listdir(predict_folder):
@@ -48,9 +72,12 @@ def merge_person_obj(label_folder,predict_folder):
             label_file_path = os.path.join(label_folder, file_name)
             with open(pre_file_path, 'r') as file:
                pre_lines = file.readlines()
-            with open(label_file_path, 'r') as file:
-               label_lines = file.readlines()
-
+            try:
+                with open(label_file_path, 'r') as file:
+                    label_lines = file.readlines()
+            except:
+                print(label_file_path)
+                label_lines = []
             new_lines = []
             for line in pre_lines:
                 new_lines.append(line)
@@ -62,5 +89,5 @@ def merge_person_obj(label_folder,predict_folder):
                 file.writelines(new_lines)
 
 
-merge_person_obj(label_folder,predict_folder)
+# merge_person_obj(label_folder,predict_folder)
 

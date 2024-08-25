@@ -26,7 +26,7 @@ With inference result got changed, the following optimization was applied:
 ### export model to onnx
 ```bash
 # for detection model
-python export.py --rknpu --weight best.pt
+python export.py --rknpu --weight 20240823.pt
 
 # for segmentation model
 python export.py --rknpu --weight yolov5s-seg.pt
@@ -42,7 +42,7 @@ python convert/convert.py
 
 ### test rknn mode1
 ```bash
-python3 yolov5.py --model_path best.rknn --data 1.mp4
+python3 yolov5.py --model_path 20240825.rknn --data 1.mp4
 ```
 
 
