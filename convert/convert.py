@@ -8,8 +8,8 @@ import cv2
 from rknn.api import RKNN
 
 # Model from https://github.com/airockchip/rknn_model_zoo
-ONNX_MODEL = '20240826.onnx'
-RKNN_MODEL = '20240826.rknn'
+ONNX_MODEL = '20240830.onnx'
+RKNN_MODEL = '20240830.rknn'
 IMG_PATH = './1.jpg'
 DATASET = './dataset.txt'
 
@@ -19,7 +19,7 @@ OBJ_THRESH = 0.25
 NMS_THRESH = 0.45
 IMG_SIZE = 640
 
-CLASSES = ['Garbage','Person','hold garbage']
+CLASSES = ['Garbage','Person','hold garbage','trash bin']
 
 
 

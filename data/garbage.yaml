@@ -2,6 +2,6 @@ train: D:\\AndroidProject\\det_garbage_yolo\\new\\train\\images
 val: D:\\AndroidProject\\det_garbage_yolo\\new\\valid\\images
 test: D:\\AndroidProject\\det_garbage_yolo\\new\\test\\images
 
-nc: 3
-names: ['Garbage','Person','hold garbage']
+nc: 4
+names: ['Garbage','Person','hold garbage','trash bin']
 

@@ -6,7 +6,10 @@ import argparse
 # add path
 import numpy as np
 import cv2
-
+from match_iou import match_boxes_with_iou, match_boxes_with_xyl
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
+import shutil
 
 # Model from https://github.com/airockchip/rknn_model_zoo
 ONNX_MODEL = 'best.onnx'
@@ -20,7 +23,7 @@ OBJ_THRESH = 0.25
 NMS_THRESH = 0.45
 IMG_SIZE = 640
 
-CLASSES =  ['Garbage','Person','hold garbage']
+CLASSES =  ['Garbage','Person','hold garbage','trash bin']
 
 
 
@@ -196,11 +199,11 @@ def draw(image, boxes, scores, classes):
         right = int(right)
         bottom = int(bottom)
 
-        cv2.rectangle(image, (top, left), (right, bottom), (255, 0, 0), 2)
+        cv2.rectangle(image, (top, left), (right, bottom), (255, 0, 0), 1)
         cv2.putText(image, '{0} {1:.2f}'.format(CLASSES[cl], score),
                     (top, left - 6),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6, (0, 0, 255), 2)
+                    0.6, (0, 0, 255), 1)
 
 
 def letterbox(im, new_shape=(640, 640), color=(0, 0, 0)):
@@ -245,31 +248,133 @@ def img_check(path):
             return True
     return False
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    # basic params
-    parser.add_argument('--model_path', type=str, required= True, help='model path, could be .pt or .rknn file')
 
-    # coco val folder: '../../../datasets/COCO//val2017'
-    parser.add_argument('--data', type=str, default='./data', help='img folder path')
+def is_cls_coordinate_in_detect_area(x,y):
+    # 05 (220,150), (250, 492), (550, 495),(450, 160)
+    # 07 (40,200), (80, 380), (600, 350),(550, 200)
+    polygon_coordinates = [(220,150), (250, 492), (550, 495),(450, 160)]
+    polygon = Polygon(polygon_coordinates)
+    point = Point(x, y)
+    if polygon.contains(point):
+        return True
+    return False
 
 
-    args = parser.parse_args()
+def is_point_in_polygon(point, polygon):
+    """
+    检查一个点是否位于指定的多边形区域内。
 
-    # init model
-    model, platform = setup_model(args)
+    参数:
+        point (tuple): 待测点坐标，格式为(cx, cy)。
+        polygon (list of tuples): 多边形顶点坐标列表，格式为[(x1, y1), (x2, y2), ...]。
 
-    video = cv2.VideoCapture(args.data)
+    返回:
+        bool: 如果点在多边形内返回True，否则返回False。
+    """
+    x, y = point
+    n = len(polygon)
+    inside = False
 
+    p1x, p1y = polygon[0]
+    for i in range(1, n + 1):
+        p2x, p2y = polygon[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xints:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+
+    return inside
+
+
+def parse_write(f,boxes,ori_matches,index1,index2,alg):
+    if alg== "iou":
+       matches, new_targets, disappeared_targets = match_boxes_with_iou(boxes[index1], boxes[index2])
+    else:
+       matches, new_targets, disappeared_targets = match_boxes_with_xyl(boxes[index1], boxes[index2])
+    # 输出匹配结果
+    result = ""
+    if not ori_matches:
+        if len(new_targets) > 0:
+            f.write(f"detect_result: No new targets found\n")
+            f.write(f"detect_result: ADD \n")
+            result = "ADD"
+        else:
+            f.write(f"detect_result: Disappeared targets: {disappeared_targets}\n")
+            f.write(f"detect_result: DROP \n")
+            result = "DROP"
+    else:
+        if ori_matches == matches:
+            if len(new_targets) > 0:
+                f.write(f"detect_result: New targets: {new_targets}\n")
+                f.write(f"detect_result: ADD \n")
+                result = "ADD"
+            else:
+                f.write(f"detect_result: Disappeared targets: {disappeared_targets}\n")
+                f.write(f"detect_result: DROP \n")
+                result = "DROP"
+        else:
+            if len(new_targets) > 0 and len(disappeared_targets) > 0:
+                f.write(f"detect_result: New targets: {new_targets},Disappeared targets: {disappeared_targets}\n")
+                f.write(f"detect_result: ADD \n")
+                result = "ADD"
+            elif len(new_targets) > 0:
+                f.write(f"detect_result: New targets: {new_targets}\n")
+                f.write(f"detect_result: ADD \n")
+                result = "ADD"
+            elif len(disappeared_targets) > 0:
+                f.write(f"detect_result: Disappeared targets: {disappeared_targets}\n")
+                f.write(f"detect_result: DROP \n")
+                result = "DROP"
+            else:
+                f.write(f"detect_result: ori_matches:{ori_matches},New targets: {new_targets}\n")
+                f.write(f"detect_result: ADD \n")
+                result = "ADD"
+
+    f.write('**' * 20 + "\n")
+    f.write(f"Matches:ori:{ori_matches},latest:{matches}\n")
+    f.write(f"New Targets:{new_targets}\n")
+    f.write(f"Disappeared Targets:{disappeared_targets}\n")
+    print("\n\n")
+    print("*" * 20)
+    return result
+
+
+
+
+def detect_mp4(model,path,save_result=False):
+    video = cv2.VideoCapture(path)
+    irregular_rectangles = {"000003": [(100, 200), (80, 492), (500, 495), (500, 180)],
+                           "000004": [(200, 250), (256, 492), (500, 500), (400, 250)],
+                           "000005": [(220, 150), (250, 492), (550, 495), (450, 180)],
+                           "000006": [(140, 250), (160, 492), (500, 495), (300, 280)],
+                           "000007": [(40,200), (80, 380), (600, 310),(550, 200)]
+                           }
+    sn=path.split("\\")[-1].split(".")[0].split("_")[-2]
     if not video.isOpened():
-       print("无法打开视频文件")
-       exit()
-    count =0
+        print("无法打开视频文件")
+        exit()
+    count = 0
+    result = []
+    # 定义编码器对象
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')  # 也可以使用其他编码器，例如 'mp4v'
+    # 获取视频的一些属性
+    frame_width = int(video.get(3))
+    frame_height = int(video.get(4))
+    fps = video.get(cv2.CAP_PROP_FPS)
+    # 创建一个VideoWriter对象来输出视频
+    out = cv2.VideoWriter('output_video.avi', fourcc, fps, (frame_width, frame_height))
+
     while video.isOpened():
-        count = count+1
+        count = count + 1
         # 逐帧读取视频
         ret, frame = video.read()
-        img_name = "test_"+str(count)+".jpg"
+        if ret == False:
+            break
+        img_name = "result/test_" + str(count) + ".jpg"
         # Set inputs
         img, ratio, (dw, dh) = letterbox(frame, new_shape=(IMG_SIZE, IMG_SIZE))
 
@@ -284,16 +389,108 @@ if __name__ == '__main__':
         input_data.append(np.transpose(input0_data, (2, 3, 0, 1)))
         input_data.append(np.transpose(input1_data, (2, 3, 0, 1)))
         input_data.append(np.transpose(input2_data, (2, 3, 0, 1)))
-
+        temp_data = []
         boxes, classes, scores = yolov5_post_process(input_data)
+        # 对每一帧进行处理，这里只是一个简单的复制
 
-        img_1 = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         if boxes is not None:
-            draw(img_1, boxes, scores, classes)
-            cv2.imwrite(img_name, img_1)
-    video.release()
+            for cl, box, sc in zip(classes, boxes, scores):
+                if cl == 0 and sc > 0.3:
+                    center_x, center_y = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+                    is_in_box = is_point_in_polygon((center_x, center_y), irregular_rectangles[sn])
+                    print(f"center_x:{center_x},center_y:{center_y},is_in_box:{is_in_box}")
+                    if is_in_box:
+                        temp_data.append(box)
+            result.append(temp_data)
+            draw(img, boxes, scores, classes)
+            if save_result:
+                draw(img, boxes, scores, classes)
+                cv2.imwrite(img_name, img)
+        out.write(img)
 
+    video.release()
+    if out is not None:
+        out.release()
     cv2.destroyAllWindows()
+
+    for alg in ["iou", "xyl"]:
+        file_name = path.split('/')[-1].split('.')[0]
+        result_path = "result_" + alg
+        if not os.path.exists(result_path):
+            os.makedirs(result_path)
+
+        with open(f'{os.path.join(result_path, file_name)}_boxes.txt', 'w') as f:
+            for item in result:
+                f.write(f"{item}\n")
+
+        status = write_to_txt(file_name, result, alg)
+        shutil.copy(f"output_video.avi", f"{result_path}/{file_name}_{status}.avi")
+    os.remove("output_video.avi")
+
+
+
+
+
+
+
+
+def write_to_txt(file_name,result,alg):
+    result_path = "result_" + alg
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
+    with open(f'{os.path.join(result_path, file_name)}.txt', 'w') as f:
+        if len(result[0])>0 and len(result[1])>0:
+            if alg=="iou":
+                matches, new_targets, disappeared_targ = match_boxes_with_iou(result[0], result[1])
+            else:
+                matches, new_targets, disappeared_targ = match_boxes_with_xyl(result[0], result[1])
+            if len(matches)==len(result[0]):
+               f.write("found targets in detected area\n")
+               return parse_write(f,result,matches,0,-1,alg)
+            else:
+                f.write(f"Not found targets in detected area:  matches:{matches},new_targets:{new_targets},disappeared_targets:{disappeared_targ}\n")
+                return parse_write(f, result, {}, 0, -1, alg)
+
+        else:
+            f.write("No targets in detected area\n")
+            return parse_write(f, result, {}, 0, -1, alg)
+
+
+# # 示例用法
+# center_point = (150, 150)  # 中心点坐标
+# irregular_rectangle = [(100, 100), (200, 100), (200, 200), (150, 250), (100, 200)]  # 不规则矩形的顶点坐标
+#
+# # 检查中心点是否在不规则矩形内
+# is_in_irregular_rectangle = is_point_in_polygon(center_point, irregular_rectangle)
+
+#print(f"Center point ({center_point}) is in the irregular rectangle: {is_in_irregular_rectangle}")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    # basic params
+    parser.add_argument('--model_path', type=str, required= True, help='model path, could be .pt or .rknn file')
+
+    # coco val folder: '../../../datasets/COCO//val2017'
+    parser.add_argument('--data', type=str, default='./data', help='img folder path')
+    parser.add_argument('--save_result', type=bool, default=False, help='img folder path')
+
+
+    args = parser.parse_args()
+    model, platform = setup_model(args)
+    video_list=[]
+    if os.path.isfile(args.data) and args.data.endswith('.mp4'):
+        video_list.append(args.data)
+    elif os.path.isdir(args.data):
+        for root, dirs, files in os.walk(args.data):
+            for file in files:
+                if file.endswith('.mp4'):
+                    video_list.append(os.path.join(root, file))
+    else:
+        print("输入文件路径有误")
+
+    for path in video_list:
+        detect_mp4(model, path, args.save_result)
+
 
 
 

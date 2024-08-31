@@ -1,4 +1,8 @@
 import os
+import os
+import shutil
+import random
+
 
 def change_label_class_ids(folder_path, new_class_id):
     for file_name in os.listdir(folder_path):
@@ -28,12 +32,10 @@ def delete_unassociated_labels(label_folder, image_folder):
         if label_file.endswith('.txt'):
             image_file = label_file.replace('.txt', '.jpg')
             if not os.path.isfile(os.path.join(image_folder, image_file)):
+                print(f"Deleted: {os.path.join(label_folder, label_file)}")
                 os.remove(os.path.join(label_folder, label_file))
 
-# label_folder = 'C:\\work\\yolo\\Person detection.v16i.yolov8\\valid\labels'
-# image_folder = 'C:\\work\\yolo\\Person detection.v16i.yolov8\\valid\images'
-#
-# delete_unassociated_labels(label_folder, image_folder)
+
 
 
 def delete_images_without_labels(images_folder, labels_folder):
@@ -54,16 +56,54 @@ def delete_images_without_labels(images_folder, labels_folder):
             print(f"Deleted: {file_path}")
 
 
-# 使用函数
-images_folder = 'D:\\AndroidProject\\det_garbage_yolo\\xiaoqu\\images'
-labels_folder = 'D:\\AndroidProject\\det_garbage_yolo\\xiaoqu\\labels'
 
-delete_images_without_labels(images_folder, labels_folder)
+def move_files(source_folder, percentage=0.15):
+    # 获取源文件夹中的所有文件
+    valid_folder = 'D:\\AndroidProject\\det_garbage_yolo\\new\\valid\images'
+    valid_labels = 'D:\\AndroidProject\\det_garbage_yolo\\new\\valid\labels'
+    train_folder = 'D:\\AndroidProject\\det_garbage_yolo\\new\\train\images'
+    train_labels = 'D:\\AndroidProject\\det_garbage_yolo\\new\\train\labels'
+    save_images = 'D:\\AndroidProject\\det_garbage_yolo\\xiaoqu\\images'
+    save_labels = 'D:\\AndroidProject\\det_garbage_yolo\\xiaoqu\\labels'
+    all_files = [f[:-4] for f in os.listdir(source_folder) if f.endswith('.jpg')]
+    for file_name in all_files:
+        img_file = os.path.join(source_folder, file_name + '.jpg')
+        label_file = os.path.join(source_folder, file_name + '.txt')
+        shutil.copy(img_file, save_images)
+        shutil.copy(label_file, save_labels)
+
+    # 计算要移动的文件数量
+    num_files_to_move = int(len(all_files) * percentage)
+    # 随机选择要移动的文件
+    valid_files = random.sample(all_files, num_files_to_move)
+    train_files = set(all_files) - set(valid_files)
+
+
+    # 移动文件
+    for file_name in valid_files:
+        img_file = os.path.join(source_folder, file_name + '.jpg')
+        img_dst_file = os.path.join(valid_folder, file_name + '.jpg')
+        label_file = os.path.join(source_folder, file_name + '.txt')
+        label_dst_file = os.path.join(valid_labels, file_name + '.txt')
+        shutil.move(img_file, img_dst_file)
+        shutil.move(label_file, label_dst_file)
+        print(f"Moved valid: {file_name}")
+
+    for file_name in train_files:
+        img_file = os.path.join(source_folder, file_name + '.jpg')
+        img_dst_file = os.path.join(train_folder, file_name + '.jpg')
+        label_file = os.path.join(source_folder, file_name + '.txt')
+        label_dst_file = os.path.join(train_labels, file_name + '.txt')
+        shutil.move(img_file, img_dst_file)
+        shutil.move(label_file, label_dst_file)
+        print(f"Moved train: {file_name}")
 
 
 
-predict_folder = "C:\\Users\\97409\\Desktop\\MP4\\labels"
-label_folder = 'C:\\Users\\97409\\Desktop\\MP4\\frames'
+
+
+
+
 
 def merge_person_obj(label_folder,predict_folder):
     for file_name in os.listdir(predict_folder):
@@ -83,11 +123,21 @@ def merge_person_obj(label_folder,predict_folder):
                 new_lines.append(line)
             for line in label_lines:
                 new_lines.append(line)
-
-
             with open(label_file_path, 'w') as file:
                 file.writelines(new_lines)
 
 
-# merge_person_obj(label_folder,predict_folder)
 
+def update_label():
+    predict_folder = "C:\\Users\\97409\\Desktop\\MP4\\labels"
+    images_folder = 'C:\\Users\\97409\\Desktop\\MP4\\frames'
+
+    merge_person_obj(images_folder,predict_folder)
+    # 使用函数
+    delete_images_without_labels(images_folder, images_folder)
+    delete_unassociated_labels(images_folder, images_folder)
+    move_files(images_folder)
+
+
+
+update_label()
